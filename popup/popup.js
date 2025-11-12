@@ -1,4 +1,48 @@
-// popup/popup.js
+// popup/popup.js - FIXED VERSION
+
+// Global error handlers
+window.addEventListener('error', (event) => {
+  console.error('Popup error:', event.error);
+  event.preventDefault();
+});
+
+window.addEventListener('unhandledrejection', (event) => {
+  console.error('Unhandled promise rejection:', event.reason);
+  event.preventDefault();
+});
+
+// Storage helper
+const StorageHelper = {
+  async get(key) {
+    try {
+      const result = await chrome.storage.local.get([key]);
+      return result[key];
+    } catch (error) {
+      console.error(`Error getting ${key} from storage:`, error);
+      return null;
+    }
+  },
+
+  async set(key, value) {
+    try {
+      await chrome.storage.local.set({ [key]: value });
+      return true;
+    } catch (error) {
+      console.error(`Error setting ${key} in storage:`, error);
+      return false;
+    }
+  },
+
+  async remove(key) {
+    try {
+      await chrome.storage.local.remove([key]);
+      return true;
+    } catch (error) {
+      console.error(`Error removing ${key} from storage:`, error);
+      return false;
+    }
+  }
+};
 
 // State management
 let detectedFields = [];
@@ -19,32 +63,28 @@ const tabButtons = document.querySelectorAll('.tab-btn');
 const tabContents = document.querySelectorAll('.tab-content');
 
 // Initialize
-document.addEventListener('DOMContentLoaded', () => {
-  loadSavedData();
-  setupEventListeners();
-  checkCurrentTab();
+document.addEventListener('DOMContentLoaded', async () => {
+  try {
+    await loadSavedData();
+    setupEventListeners();
+    await checkCurrentTab();
+  } catch (error) {
+    console.error('Initialization error:', error);
+    showStatus('⚠️ Extension failed to initialize. Please reload.', 'error');
+  }
 });
 
 // Setup event listeners
 function setupEventListeners() {
-  // Tab switching
   tabButtons.forEach(btn => {
     btn.addEventListener('click', () => switchTab(btn.dataset.tab));
   });
 
-  // Detect fields button
   detectBtn.addEventListener('click', detectFields);
-
-  // Fill form button
   fillBtn.addEventListener('click', fillForm);
-
-  // Save data button
   saveBtn.addEventListener('click', saveData);
-
-  // Clear saved data button
   clearBtn.addEventListener('click', clearSavedData);
 
-  // GitHub link
   document.getElementById('github-link').addEventListener('click', (e) => {
     e.preventDefault();
     chrome.tabs.create({ url: 'https://github.com/YOUR_USERNAME/google-forms-autofill' });
@@ -68,13 +108,17 @@ function switchTab(tabName) {
 
 // Check if current tab is Google Forms
 async function checkCurrentTab() {
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  currentTab = tab;
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    currentTab = tab;
 
-  if (!tab.url.includes('docs.google.com/forms')) {
-    showStatus('⚠️ Please open a Google Forms page to use this extension', 'error');
-    detectBtn.disabled = true;
-    fillBtn.disabled = true;
+    if (!tab.url || !tab.url.includes('docs.google.com/forms')) {
+      showStatus('⚠️ Please open a Google Forms page to use this extension', 'error');
+      detectBtn.disabled = true;
+      fillBtn.disabled = true;
+    }
+  } catch (error) {
+    console.error('Error checking current tab:', error);
   }
 }
 
@@ -86,7 +130,6 @@ async function detectFields() {
 
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
 
-    // Send message to content script
     chrome.tabs.sendMessage(tab.id, { action: 'getFields' }, (response) => {
       if (chrome.runtime.lastError) {
         showStatus('❌ Error: Could not connect to the page. Try refreshing the form.', 'error');
@@ -211,13 +254,12 @@ function createFieldInput(field, index) {
 // Save data to Chrome Storage
 async function saveData() {
   try {
-    // Collect values from inputs
     const updatedFields = detectedFields.map((field, index) => {
       const fieldCopy = { ...field };
 
       if (field.type === 'text' || field.type === 'textarea') {
         const input = document.querySelector(`[data-index="${index}"]`);
-        fieldCopy.value = input.value;
+        fieldCopy.value = input ? input.value : '';
       } else if (field.type === 'radio') {
         const selected = document.querySelector(`input[name="radio-${index}"]:checked`);
         fieldCopy.value = selected ? selected.value : '';
@@ -229,13 +271,14 @@ async function saveData() {
       return fieldCopy;
     });
 
-    // Save to Chrome Storage
-    await chrome.storage.local.set({ savedFormData: updatedFields });
+    const success = await StorageHelper.set('savedFormData', updatedFields);
 
-    showStatus('✅ Data saved successfully!', 'success');
-
-    // Update saved data tab
-    loadSavedData();
+    if (success) {
+      showStatus('✅ Data saved successfully!', 'success');
+      await loadSavedData();
+    } else {
+      showStatus('❌ Failed to save data', 'error');
+    }
   } catch (error) {
     console.error('Error saving data:', error);
     showStatus('❌ Failed to save data', 'error');
@@ -245,9 +288,9 @@ async function saveData() {
 // Fill form with saved data
 async function fillForm() {
   try {
-    const result = await chrome.storage.local.get(['savedFormData']);
+    const savedData = await StorageHelper.get('savedFormData');
 
-    if (!result.savedFormData) {
+    if (!savedData || !Array.isArray(savedData) || savedData.length === 0) {
       showStatus('⚠️ No saved data found. Please save data first.', 'error');
       return;
     }
@@ -256,7 +299,7 @@ async function fillForm() {
 
     chrome.tabs.sendMessage(tab.id, {
       action: 'fillForm',
-      data: result.savedFormData
+      data: savedData
     }, (response) => {
       if (chrome.runtime.lastError) {
         showStatus('❌ Error: Could not connect to the page', 'error');
@@ -264,7 +307,13 @@ async function fillForm() {
       }
 
       if (response && response.success) {
-        showStatus('✅ Form filled successfully!', 'success');
+        const { filledCount, errorCount } = response;
+        
+        if (errorCount > 0) {
+          showStatus(`⚠️ Filled ${filledCount}/${filledCount + errorCount} fields (${errorCount} errors)`, 'error');
+        } else {
+          showStatus(`✅ All ${filledCount} fields filled successfully!`, 'success');
+        }
       }
     });
   } catch (error) {
@@ -276,15 +325,20 @@ async function fillForm() {
 // Load and display saved data
 async function loadSavedData() {
   try {
-    const result = await chrome.storage.local.get(['savedFormData']);
+    const savedData = await StorageHelper.get('savedFormData');
 
-    if (result.savedFormData && result.savedFormData.length > 0) {
-      savedStatus.textContent = `You have saved data for ${result.savedFormData.length} fields`;
+    if (savedData && Array.isArray(savedData) && savedData.length > 0) {
+      savedStatus.textContent = `You have saved data for ${savedData.length} fields`;
       clearBtn.style.display = 'block';
 
-      // Display preview
       savedPreview.innerHTML = '';
-      result.savedFormData.forEach(field => {
+      
+      savedData.forEach(field => {
+        if (!field || !field.question) {
+          console.warn('Invalid field data:', field);
+          return;
+        }
+
         const fieldDiv = document.createElement('div');
         fieldDiv.className = 'saved-field';
 
@@ -296,9 +350,11 @@ async function loadSavedData() {
         value.className = 'saved-field-value';
 
         if (Array.isArray(field.value)) {
-          value.textContent = field.value.join(', ') || '(empty)';
+          value.textContent = field.value.length > 0 ? field.value.join(', ') : '(empty)';
+        } else if (field.value !== undefined && field.value !== null) {
+          value.textContent = field.value.toString() || '(empty)';
         } else {
-          value.textContent = field.value || '(empty)';
+          value.textContent = '(empty)';
         }
 
         fieldDiv.appendChild(question);
@@ -307,13 +363,19 @@ async function loadSavedData() {
       });
 
       savedPreview.classList.add('show');
+      
     } else {
       savedStatus.textContent = 'No saved data yet';
       clearBtn.style.display = 'none';
+      savedPreview.innerHTML = '';
       savedPreview.classList.remove('show');
     }
+    
   } catch (error) {
     console.error('Error loading saved data:', error);
+    savedStatus.textContent = 'Error loading saved data';
+    clearBtn.style.display = 'none';
+    savedPreview.classList.remove('show');
   }
 }
 
@@ -324,9 +386,25 @@ async function clearSavedData() {
   }
 
   try {
-    await chrome.storage.local.remove(['savedFormData']);
-    loadSavedData();
-    showStatus('🗑️ Saved data cleared', 'success');
+    const success = await StorageHelper.remove('savedFormData');
+    
+    if (success) {
+      // Reset UI state
+      detectedFields = [];
+      fieldsContainer.style.display = 'none';
+      fieldsList.innerHTML = '';
+      fillBtn.disabled = true;
+      
+      // Update saved data display
+      savedStatus.textContent = 'No saved data yet';
+      clearBtn.style.display = 'none';
+      savedPreview.innerHTML = '';
+      savedPreview.classList.remove('show');
+      
+      showStatus('🗑️ Saved data cleared successfully', 'success');
+    } else {
+      showStatus('❌ Failed to clear data', 'error');
+    }
   } catch (error) {
     console.error('Error clearing data:', error);
     showStatus('❌ Failed to clear data', 'error');
