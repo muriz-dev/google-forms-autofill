@@ -1,0 +1,29 @@
+# .gitignore
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor directories
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Node modules (jika nanti pakai build tools)
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# Build outputs (jika nanti ada)
+dist/
+build/
+
+# Extension packages
+*.zip
+*.crx
+*.pem
+
+# Temporary files
+*.tmp
+*.log
