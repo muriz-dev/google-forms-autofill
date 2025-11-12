@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Google Forms Auto-Fill</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <header>
+      <h1>⚡ Forms Auto-Fill</h1>
+      <p class="subtitle">Manage your form data</p>
+    </header>
+
+    <!-- Tab Navigation -->
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="detect">Detect Fields</button>
+      <button class="tab-btn" data-tab="saved">Saved Data</button>
+    </div>
+
+    <!-- Tab: Detect Fields -->
+    <div class="tab-content active" id="detect-tab">
+      <div class="status-box">
+        <p id="status-message">Click "Detect Fields" to scan the current form</p>
+      </div>
+
+      <div class="action-buttons">
+        <button id="detect-btn" class="btn btn-primary">🔍 Detect Fields</button>
+        <button id="fill-btn" class="btn btn-success" disabled>✨ Fill Form</button>
+      </div>
+
+      <!-- Form Fields Container -->
+      <div id="fields-container" class="fields-container" style="display: none;">
+        <h3>Form Fields</h3>
+        <div id="fields-list"></div>
+        <button id="save-btn" class="btn btn-primary full-width">💾 Save Data</button>
+      </div>
+    </div>
+
+    <!-- Tab: Saved Data -->
+    <div class="tab-content" id="saved-tab">
+      <div class="saved-info">
+        <p id="saved-status">No saved data yet</p>
+        <button id="clear-btn" class="btn btn-danger" style="display: none;">🗑️ Clear Saved Data</button>
+      </div>
+      
+      <div id="saved-preview" class="saved-preview"></div>
+    </div>
+
+    <!-- Footer -->
+    <footer>
+      <p class="version">v1.0.0 | <a href="#" id="github-link">GitHub</a></p>
+    </footer>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

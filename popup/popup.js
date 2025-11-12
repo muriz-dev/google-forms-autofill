@@ -1,0 +1,346 @@
+// popup/popup.js
+
+// State management
+let detectedFields = [];
+let currentTab = null;
+
+// DOM Elements
+const detectBtn = document.getElementById('detect-btn');
+const fillBtn = document.getElementById('fill-btn');
+const saveBtn = document.getElementById('save-btn');
+const clearBtn = document.getElementById('clear-btn');
+const statusMessage = document.getElementById('status-message');
+const statusBox = document.querySelector('.status-box');
+const fieldsContainer = document.getElementById('fields-container');
+const fieldsList = document.getElementById('fields-list');
+const savedStatus = document.getElementById('saved-status');
+const savedPreview = document.getElementById('saved-preview');
+const tabButtons = document.querySelectorAll('.tab-btn');
+const tabContents = document.querySelectorAll('.tab-content');
+
+// Initialize
+document.addEventListener('DOMContentLoaded', () => {
+  loadSavedData();
+  setupEventListeners();
+  checkCurrentTab();
+});
+
+// Setup event listeners
+function setupEventListeners() {
+  // Tab switching
+  tabButtons.forEach(btn => {
+    btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+  });
+
+  // Detect fields button
+  detectBtn.addEventListener('click', detectFields);
+
+  // Fill form button
+  fillBtn.addEventListener('click', fillForm);
+
+  // Save data button
+  saveBtn.addEventListener('click', saveData);
+
+  // Clear saved data button
+  clearBtn.addEventListener('click', clearSavedData);
+
+  // GitHub link
+  document.getElementById('github-link').addEventListener('click', (e) => {
+    e.preventDefault();
+    chrome.tabs.create({ url: 'https://github.com/YOUR_USERNAME/google-forms-autofill' });
+  });
+}
+
+// Switch tabs
+function switchTab(tabName) {
+  tabButtons.forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.tab === tabName);
+  });
+
+  tabContents.forEach(content => {
+    content.classList.toggle('active', content.id === `${tabName}-tab`);
+  });
+
+  if (tabName === 'saved') {
+    loadSavedData();
+  }
+}
+
+// Check if current tab is Google Forms
+async function checkCurrentTab() {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  currentTab = tab;
+
+  if (!tab.url.includes('docs.google.com/forms')) {
+    showStatus('⚠️ Please open a Google Forms page to use this extension', 'error');
+    detectBtn.disabled = true;
+    fillBtn.disabled = true;
+  }
+}
+
+// Detect fields from current form
+async function detectFields() {
+  try {
+    showStatus('🔍 Detecting form fields...', 'info');
+    detectBtn.disabled = true;
+
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+
+    // Send message to content script
+    chrome.tabs.sendMessage(tab.id, { action: 'getFields' }, (response) => {
+      if (chrome.runtime.lastError) {
+        showStatus('❌ Error: Could not connect to the page. Try refreshing the form.', 'error');
+        detectBtn.disabled = false;
+        return;
+      }
+
+      if (response && response.fields && response.fields.length > 0) {
+        detectedFields = response.fields;
+        displayFields(response.fields);
+        showStatus(`✅ Detected ${response.fields.length} fields successfully`, 'success');
+        fillBtn.disabled = false;
+      } else {
+        showStatus('⚠️ No fields detected. Make sure you\'re on a Google Forms page.', 'error');
+      }
+
+      detectBtn.disabled = false;
+    });
+  } catch (error) {
+    console.error('Error detecting fields:', error);
+    showStatus('❌ An error occurred while detecting fields', 'error');
+    detectBtn.disabled = false;
+  }
+}
+
+// Display detected fields in UI
+function displayFields(fields) {
+  fieldsList.innerHTML = '';
+
+  fields.forEach((field, index) => {
+    const fieldItem = createFieldInput(field, index);
+    fieldsList.appendChild(fieldItem);
+  });
+
+  fieldsContainer.style.display = 'block';
+}
+
+// Create input element based on field type
+function createFieldInput(field, index) {
+  const fieldDiv = document.createElement('div');
+  fieldDiv.className = 'field-item';
+
+  const label = document.createElement('label');
+  label.className = 'field-label';
+  label.innerHTML = `${field.question} <span class="field-type">(${field.type})</span>`;
+  fieldDiv.appendChild(label);
+
+  let inputElement;
+
+  switch (field.type) {
+    case 'text':
+      inputElement = document.createElement('input');
+      inputElement.type = 'text';
+      inputElement.className = 'field-input';
+      inputElement.placeholder = 'Enter value...';
+      inputElement.value = field.value || '';
+      inputElement.dataset.index = index;
+      break;
+
+    case 'textarea':
+      inputElement = document.createElement('textarea');
+      inputElement.className = 'field-textarea';
+      inputElement.placeholder = 'Enter text...';
+      inputElement.value = field.value || '';
+      inputElement.dataset.index = index;
+      break;
+
+    case 'radio':
+      inputElement = document.createElement('div');
+      inputElement.className = 'options-group';
+      field.options.forEach(option => {
+        const optionDiv = document.createElement('div');
+        optionDiv.className = 'option-item';
+
+        const radio = document.createElement('input');
+        radio.type = 'radio';
+        radio.name = `radio-${index}`;
+        radio.value = option;
+        radio.id = `radio-${index}-${option}`;
+        radio.checked = field.value === option;
+        radio.dataset.index = index;
+
+        const optionLabel = document.createElement('label');
+        optionLabel.htmlFor = radio.id;
+        optionLabel.textContent = option;
+
+        optionDiv.appendChild(radio);
+        optionDiv.appendChild(optionLabel);
+        inputElement.appendChild(optionDiv);
+      });
+      break;
+
+    case 'checkbox':
+      inputElement = document.createElement('div');
+      inputElement.className = 'options-group';
+      field.options.forEach(option => {
+        const optionDiv = document.createElement('div');
+        optionDiv.className = 'option-item';
+
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.value = option;
+        checkbox.id = `checkbox-${index}-${option}`;
+        checkbox.checked = field.value && field.value.includes(option);
+        checkbox.dataset.index = index;
+
+        const optionLabel = document.createElement('label');
+        optionLabel.htmlFor = checkbox.id;
+        optionLabel.textContent = option;
+
+        optionDiv.appendChild(checkbox);
+        optionDiv.appendChild(optionLabel);
+        inputElement.appendChild(optionDiv);
+      });
+      break;
+  }
+
+  fieldDiv.appendChild(inputElement);
+  return fieldDiv;
+}
+
+// Save data to Chrome Storage
+async function saveData() {
+  try {
+    // Collect values from inputs
+    const updatedFields = detectedFields.map((field, index) => {
+      const fieldCopy = { ...field };
+
+      if (field.type === 'text' || field.type === 'textarea') {
+        const input = document.querySelector(`[data-index="${index}"]`);
+        fieldCopy.value = input.value;
+      } else if (field.type === 'radio') {
+        const selected = document.querySelector(`input[name="radio-${index}"]:checked`);
+        fieldCopy.value = selected ? selected.value : '';
+      } else if (field.type === 'checkbox') {
+        const checkboxes = document.querySelectorAll(`input[type="checkbox"][data-index="${index}"]:checked`);
+        fieldCopy.value = Array.from(checkboxes).map(cb => cb.value);
+      }
+
+      return fieldCopy;
+    });
+
+    // Save to Chrome Storage
+    await chrome.storage.local.set({ savedFormData: updatedFields });
+
+    showStatus('✅ Data saved successfully!', 'success');
+
+    // Update saved data tab
+    loadSavedData();
+  } catch (error) {
+    console.error('Error saving data:', error);
+    showStatus('❌ Failed to save data', 'error');
+  }
+}
+
+// Fill form with saved data
+async function fillForm() {
+  try {
+    const result = await chrome.storage.local.get(['savedFormData']);
+
+    if (!result.savedFormData) {
+      showStatus('⚠️ No saved data found. Please save data first.', 'error');
+      return;
+    }
+
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+
+    chrome.tabs.sendMessage(tab.id, {
+      action: 'fillForm',
+      data: result.savedFormData
+    }, (response) => {
+      if (chrome.runtime.lastError) {
+        showStatus('❌ Error: Could not connect to the page', 'error');
+        return;
+      }
+
+      if (response && response.success) {
+        showStatus('✅ Form filled successfully!', 'success');
+      }
+    });
+  } catch (error) {
+    console.error('Error filling form:', error);
+    showStatus('❌ Failed to fill form', 'error');
+  }
+}
+
+// Load and display saved data
+async function loadSavedData() {
+  try {
+    const result = await chrome.storage.local.get(['savedFormData']);
+
+    if (result.savedFormData && result.savedFormData.length > 0) {
+      savedStatus.textContent = `You have saved data for ${result.savedFormData.length} fields`;
+      clearBtn.style.display = 'block';
+
+      // Display preview
+      savedPreview.innerHTML = '';
+      result.savedFormData.forEach(field => {
+        const fieldDiv = document.createElement('div');
+        fieldDiv.className = 'saved-field';
+
+        const question = document.createElement('div');
+        question.className = 'saved-field-question';
+        question.textContent = field.question;
+
+        const value = document.createElement('div');
+        value.className = 'saved-field-value';
+
+        if (Array.isArray(field.value)) {
+          value.textContent = field.value.join(', ') || '(empty)';
+        } else {
+          value.textContent = field.value || '(empty)';
+        }
+
+        fieldDiv.appendChild(question);
+        fieldDiv.appendChild(value);
+        savedPreview.appendChild(fieldDiv);
+      });
+
+      savedPreview.classList.add('show');
+    } else {
+      savedStatus.textContent = 'No saved data yet';
+      clearBtn.style.display = 'none';
+      savedPreview.classList.remove('show');
+    }
+  } catch (error) {
+    console.error('Error loading saved data:', error);
+  }
+}
+
+// Clear saved data
+async function clearSavedData() {
+  if (!confirm('Are you sure you want to clear all saved data?')) {
+    return;
+  }
+
+  try {
+    await chrome.storage.local.remove(['savedFormData']);
+    loadSavedData();
+    showStatus('🗑️ Saved data cleared', 'success');
+  } catch (error) {
+    console.error('Error clearing data:', error);
+    showStatus('❌ Failed to clear data', 'error');
+  }
+}
+
+// Show status message
+function showStatus(message, type = 'info') {
+  statusMessage.textContent = message;
+  statusBox.className = 'status-box';
+
+  if (type === 'success') {
+    statusBox.classList.add('success');
+  } else if (type === 'error') {
+    statusBox.classList.add('error');
+  }
+}
