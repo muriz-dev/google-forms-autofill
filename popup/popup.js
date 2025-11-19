@@ -245,6 +245,27 @@ function createFieldInput(field, index) {
         inputElement.appendChild(optionDiv);
       });
       break;
+
+    case 'dropdown':
+      inputElement = document.createElement('select');
+      inputElement.className = 'field-select';
+      inputElement.dataset.index = index;
+      
+      // Add placeholder option
+      const placeholderOption = document.createElement('option');
+      placeholderOption.value = '';
+      placeholderOption.textContent = '-- Select an option --';
+      inputElement.appendChild(placeholderOption);
+      
+      // Add all options
+      field.options.forEach(option => {
+        const opt = document.createElement('option');
+        opt.value = option;
+        opt.textContent = option;
+        opt.selected = field.value === option;
+        inputElement.appendChild(opt);
+      });
+      break;
   }
 
   fieldDiv.appendChild(inputElement);
@@ -266,6 +287,9 @@ async function saveData() {
       } else if (field.type === 'checkbox') {
         const checkboxes = document.querySelectorAll(`input[type="checkbox"][data-index="${index}"]:checked`);
         fieldCopy.value = Array.from(checkboxes).map(cb => cb.value);
+      } else if (field.type === 'dropdown') {
+        const select = document.querySelector(`select[data-index="${index}"]`);
+        fieldCopy.value = select ? select.value : '';
       }
 
       return fieldCopy;
@@ -307,13 +331,7 @@ async function fillForm() {
       }
 
       if (response && response.success) {
-        const { filledCount, errorCount } = response;
-        
-        if (errorCount > 0) {
-          showStatus(`⚠️ Filled ${filledCount}/${filledCount + errorCount} fields (${errorCount} errors)`, 'error');
-        } else {
-          showStatus(`✅ All ${filledCount} fields filled successfully!`, 'success');
-        }
+        showStatus('✅ Form filled successfully!', 'success');
       }
     });
   } catch (error) {

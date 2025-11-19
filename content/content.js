@@ -1,4 +1,4 @@
-// content/content.js - IMPROVED VERSION
+// content/content.js - WITH DROPDOWN FIX
 
 console.log('Google Forms Auto-Fill: Content script loaded');
 
@@ -127,15 +127,60 @@ function getFormFields() {
     }
   });
   
+  // 5. Dropdowns (Select/Listbox)
+  const dropdowns = document.querySelectorAll('[role="listbox"]');
+  dropdowns.forEach((dropdown, index) => {
+    const questionDiv = dropdown.closest('[role="listitem"]');
+    const heading = questionDiv ? questionDiv.querySelector('[role="heading"]') : null;
+    const questionText = heading ? heading.innerText.trim() : `Dropdown ${index + 1}`;
+    
+    // Get current selected value
+    const selectedOption = dropdown.querySelector('[aria-selected="true"]');
+    const currentValue = selectedOption ? selectedOption.getAttribute('data-value') || selectedOption.innerText.trim() : '';
+    
+    // Try to get all options
+    const options = [];
+    const optionElements = dropdown.querySelectorAll('[role="option"]');
+    
+    optionElements.forEach(option => {
+      const value = option.getAttribute('data-value') || option.innerText.trim();
+      if (value && value !== 'Choose' && value !== 'Pilih') {
+        options.push(value);
+      }
+    });
+    
+    if (options.length === 0) {
+      fields.push({
+        type: 'dropdown',
+        question: questionText,
+        options: ['(Need to click dropdown to see options)'],
+        ariaLabel: dropdown.getAttribute('aria-label'),
+        dataParams: dropdown.getAttribute('data-params'),
+        value: currentValue,
+        needsExpansion: true
+      });
+    } else {
+      fields.push({
+        type: 'dropdown',
+        question: questionText,
+        options: options,
+        ariaLabel: dropdown.getAttribute('aria-label'),
+        dataParams: dropdown.getAttribute('data-params'),
+        value: currentValue,
+        needsExpansion: false
+      });
+    }
+  });
+  
   return fields;
 }
 
 // Fungsi untuk fill form dengan data yang tersimpan
-function fillForm(formData) {
+async function fillForm(formData) {
   let filledCount = 0;
   let errorCount = 0;
   
-  formData.forEach(field => {
+  for (const field of formData) {
     try {
       let success = false;
       
@@ -152,6 +197,9 @@ function fillForm(formData) {
         case 'checkbox':
           success = fillCheckbox(field);
           break;
+        case 'dropdown':
+          success = await fillDropdown(field);
+          break;
       }
       
       if (success) {
@@ -164,7 +212,7 @@ function fillForm(formData) {
       errorCount++;
       console.error(`Error filling field: ${field.question}`, error);
     }
-  });
+  }
   
   console.log(`Fill complete: ${filledCount} success, ${errorCount} errors`);
   return { filledCount, errorCount };
@@ -200,7 +248,6 @@ function fillTextInput(field) {
       }
     }
     
-    // Also check parent heading
     const questionDiv = input.closest('[role="listitem"]');
     const heading = questionDiv ? questionDiv.querySelector('[role="heading"]') : null;
     if (heading && heading.innerText.trim() === field.question) {
@@ -246,7 +293,6 @@ function fillTextarea(field) {
 function fillRadioButton(field) {
   if (!field.value) return false;
   
-  // Find all radio groups and match by question
   const radioGroups = document.querySelectorAll('[role="radiogroup"]');
   
   for (const group of radioGroups) {
@@ -261,11 +307,9 @@ function fillRadioButton(field) {
         const label = radio.getAttribute('aria-label') || radio.innerText.trim();
         
         if (label === field.value) {
-          // Check if already selected
           const isSelected = radio.getAttribute('aria-checked') === 'true';
           if (!isSelected) {
             radio.click();
-            // Wait a bit for Google Forms to process
             setTimeout(() => {}, 100);
           }
           return true;
@@ -280,7 +324,6 @@ function fillRadioButton(field) {
 function fillCheckbox(field) {
   if (!field.value || field.value.length === 0) return false;
   
-  // Find checkbox group by question
   const listItems = document.querySelectorAll('[role="listitem"]');
   
   for (const item of listItems) {
@@ -299,7 +342,6 @@ function fillCheckbox(field) {
         const isChecked = checkbox.getAttribute('aria-checked') === 'true';
         const shouldBeChecked = field.value.includes(label);
         
-        // Toggle if state doesn't match
         if (isChecked !== shouldBeChecked) {
           checkbox.click();
           setTimeout(() => {}, 50);
@@ -316,17 +358,272 @@ function fillCheckbox(field) {
   return false;
 }
 
-// Helper: Set input value with proper event triggering
+async function fillDropdown(field) {
+  if (!field.value) return false;
+  
+  console.log(`[Dropdown] Attempting to fill: "${field.question}" with value: "${field.value}"`);
+  
+  const listItems = document.querySelectorAll('[role="listitem"]');
+  
+  for (const item of listItems) {
+    const heading = item.querySelector('[role="heading"]');
+    const questionText = heading ? heading.innerText.trim() : '';
+    
+    if (questionText === field.question) {
+      const dropdown = item.querySelector('[role="listbox"]');
+      if (!dropdown) {
+        console.warn('[Dropdown] Listbox not found');
+        continue;
+      }
+      
+      console.log('[Dropdown] Found matching dropdown');
+      
+      // Check if dropdown needs expansion
+      const isCollapsed = dropdown.getAttribute('aria-expanded') === 'false';
+      
+      if (isCollapsed) {
+        console.log('[Dropdown] Expanding dropdown...');
+        
+        // Try multiple methods based on manual test
+        // Method 1: Click presentation layer
+        const presentation = dropdown.querySelector('[role="presentation"]');
+        if (presentation) {
+          console.log('[Dropdown] Trying presentation layer click...');
+          presentation.click();
+        } else {
+          console.log('[Dropdown] Trying dropdown click...');
+          dropdown.click();
+        }
+        
+        await sleep(300);
+        
+        // Wait for aria-expanded to change
+        let attempts = 0;
+        while (dropdown.getAttribute('aria-expanded') !== 'true' && attempts < 15) {
+          await sleep(100);
+          attempts++;
+          
+          // Retry with mousedown if not expanded after 5 attempts
+          if (attempts === 5 && dropdown.getAttribute('aria-expanded') !== 'true') {
+            console.log('[Dropdown] Retrying with mousedown event...');
+            dropdown.dispatchEvent(new MouseEvent('mousedown', {
+              bubbles: true,
+              cancelable: true,
+              view: window
+            }));
+          }
+        }
+        
+        const isExpanded = dropdown.getAttribute('aria-expanded') === 'true';
+        console.log(`[Dropdown] Expanded: ${isExpanded} (after ${attempts * 100}ms)`);
+        
+        if (!isExpanded) {
+          console.warn('[Dropdown] Failed to expand dropdown');
+          return false;
+        }
+      }
+      
+      // Look for the popup container
+      const popupContainer = dropdown.querySelector('[jsname="V68bde"]');
+      
+      if (!popupContainer) {
+        console.warn('[Dropdown] Popup container (V68bde) not found');
+        return false;
+      }
+      
+      // Wait for popup to be visible
+      let popupVisible = false;
+      let waitAttempts = 0;
+      
+      while (!popupVisible && waitAttempts < 15) {
+        const popupStyle = window.getComputedStyle(popupContainer);
+        popupVisible = popupStyle.display !== 'none';
+        
+        if (!popupVisible) {
+          await sleep(100);
+          waitAttempts++;
+        }
+      }
+      
+      console.log(`[Dropdown] Popup visible: ${popupVisible} (after ${waitAttempts * 100}ms)`);
+      
+      if (!popupVisible) {
+        console.warn('[Dropdown] Popup not visible, checking if options are in LgbsSe instead...');
+        
+        // Fallback: Some forms show options directly in LgbsSe without popup
+        const lgbsseContainer = dropdown.querySelector('[jsname="LgbsSe"]');
+        if (lgbsseContainer) {
+          const directOptions = lgbsseContainer.querySelectorAll('[role="option"]');
+          if (directOptions.length > 0) {
+            console.log(`[Dropdown] Found ${directOptions.length} options in LgbsSe (no popup)`);
+            
+            // Use these options instead
+            let targetOption = null;
+            
+            for (const option of directOptions) {
+              const dataValue = option.getAttribute('data-value');
+              const spanElement = option.querySelector('.vRMGwf') || option.querySelector('span');
+              const optionText = spanElement ? spanElement.innerText.trim() : option.innerText.trim();
+              
+              if (!dataValue || dataValue === '' || optionText === 'Choose' || optionText === 'Pilih') {
+                continue;
+              }
+              
+              if (optionText === field.value || dataValue === field.value) {
+                targetOption = option;
+                console.log(`[Dropdown] ✓ Found in LgbsSe: "${optionText}"`);
+                break;
+              }
+            }
+            
+            if (targetOption) {
+              targetOption.click();
+              await sleep(300);
+              
+              const selected = dropdown.querySelector('[role="option"][aria-selected="true"]');
+              const selectedValue = selected ? selected.getAttribute('data-value') : '';
+              console.log(`[Dropdown] Final value: "${selectedValue}"`);
+              
+              return selectedValue === field.value;
+            }
+          }
+        }
+        
+        return false;
+      }
+      
+      // Wait for options to render in popup
+      await sleep(300);
+      
+      // Get options from popup container
+      let options = popupContainer.querySelectorAll('[role="option"]');
+      
+      if (options.length === 0) {
+        console.log('[Dropdown] Trying jsname selector...');
+        options = popupContainer.querySelectorAll('[jsname="wQNmvb"]');
+      }
+      
+      if (options.length === 0) {
+        console.log('[Dropdown] Trying data-value selector...');
+        options = popupContainer.querySelectorAll('[data-value]');
+      }
+      
+      console.log(`[Dropdown] Found ${options.length} options in popup`);
+      
+      if (options.length === 0) {
+        console.error('[Dropdown] No options found');
+        return false;
+      }
+      
+      // Find target option
+      let targetOption = null;
+      
+      for (const option of options) {
+        const dataValue = option.getAttribute('data-value');
+        const spanElement = option.querySelector('.vRMGwf') || option.querySelector('span');
+        const optionText = spanElement ? spanElement.innerText.trim() : option.innerText.trim();
+        
+        if (!dataValue || dataValue === '' || optionText === 'Choose' || optionText === 'Pilih') {
+          continue;
+        }
+        
+        console.log(`[Dropdown] Checking: "${optionText}" (data-value: "${dataValue}")`);
+        
+        if (optionText === field.value || dataValue === field.value) {
+          targetOption = option;
+          console.log(`[Dropdown] ✓ Found: "${optionText}"`);
+          break;
+        }
+      }
+      
+      if (!targetOption) {
+        console.warn(`[Dropdown] ✗ Not found: "${field.value}"`);
+        
+        const available = Array.from(options)
+          .map(o => {
+            const dv = o.getAttribute('data-value');
+            const span = o.querySelector('.vRMGwf') || o.querySelector('span');
+            const txt = span ? span.innerText.trim() : o.innerText.trim();
+            return `"${txt}" (${dv})`;
+          })
+          .filter(v => !v.includes('()') && !v.includes('Choose') && !v.includes('Pilih'));
+        
+        console.log('[Dropdown] Available:', available);
+        
+        document.body.click();
+        await sleep(200);
+        return false;
+      }
+      
+      // Click the option
+      console.log('[Dropdown] Clicking option...');
+      
+      targetOption.scrollIntoView({ block: 'nearest', behavior: 'auto' });
+      await sleep(100);
+      
+      targetOption.dispatchEvent(new MouseEvent('mouseenter', { 
+        bubbles: true, 
+        cancelable: true,
+        view: window 
+      }));
+      await sleep(50);
+      
+      targetOption.dispatchEvent(new MouseEvent('mousedown', { 
+        bubbles: true, 
+        cancelable: true,
+        view: window,
+        button: 0
+      }));
+      await sleep(50);
+      
+      targetOption.click();
+      await sleep(50);
+      
+      targetOption.dispatchEvent(new MouseEvent('mouseup', { 
+        bubbles: true, 
+        cancelable: true,
+        view: window,
+        button: 0
+      }));
+      
+      await sleep(400);
+      
+      dropdown.dispatchEvent(new Event('change', { bubbles: true }));
+      dropdown.dispatchEvent(new Event('input', { bubbles: true }));
+      await sleep(200);
+      
+      // Verify
+      const selected = dropdown.querySelector('[role="option"][aria-selected="true"]');
+      const selectedValue = selected ? selected.getAttribute('data-value') : '';
+      
+      console.log(`[Dropdown] Final value: "${selectedValue}"`);
+      
+      if (selectedValue === field.value) {
+        console.log('[Dropdown] ✓ Success!');
+        return true;
+      } else {
+        console.warn('[Dropdown] ✗ Verification failed');
+        return false;
+      }
+    }
+  }
+  
+  console.warn(`[Dropdown] Question "${field.question}" not found`);
+  return false;
+}
+
+// Helper: Sleep function
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// Helper: Set input value
 function setInputValue(element, value) {
   if (!element) return false;
   
-  // Focus the element first
   element.focus();
-  
-  // Set the value
   element.value = value;
   
-  // Trigger all necessary events untuk Google Forms validation
   const events = [
     new Event('input', { bubbles: true, cancelable: true }),
     new Event('change', { bubbles: true, cancelable: true }),
@@ -335,23 +632,17 @@ function setInputValue(element, value) {
     new KeyboardEvent('keyup', { bubbles: true, cancelable: true, key: 'Enter' })
   ];
   
-  events.forEach(event => {
-    element.dispatchEvent(event);
-  });
-  
-  // Blur to trigger validation
+  events.forEach(event => element.dispatchEvent(event));
   element.blur();
   
-  // Small delay to let Google Forms process
   setTimeout(() => {
-    // Re-trigger input event after blur
     element.dispatchEvent(new Event('input', { bubbles: true }));
   }, 50);
   
   return true;
 }
 
-// Listen untuk message dari popup atau background
+// Message listener
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'getFields') {
     try {
@@ -365,19 +656,20 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
   
   if (request.action === 'fillForm') {
-    try {
-      const result = fillForm(request.data);
+    fillForm(request.data).then(result => {
       sendResponse({ success: true, ...result });
-    } catch (error) {
+    }).catch(error => {
       console.error('Error filling form:', error);
       sendResponse({ success: false, error: error.message });
-    }
+    });
+    
+    return true;
   }
   
-  return true; // Keep message channel open for async response
+  return true;
 });
 
-// Tambahkan button "Auto Fill" di halaman
+// Floating button
 function addAutoFillButton() {
   if (document.getElementById('auto-fill-btn')) return;
   
@@ -419,9 +711,9 @@ function addAutoFillButton() {
       const result = await chrome.storage.local.get(['savedFormData']);
       
       if (result.savedFormData) {
-        const fillResult = fillForm(result.savedFormData);
+        const fillResult = await fillForm(result.savedFormData);
         
-        button.innerHTML = `✅ Filled ${fillResult.filledCount} fields`;
+        button.innerHTML = `✅ Filled ${fillResult.filledCount}`;
         button.style.background = 'linear-gradient(135deg, #4caf50 0%, #45a049 100%)';
         
         setTimeout(() => {
@@ -430,7 +722,7 @@ function addAutoFillButton() {
           button.disabled = false;
         }, 2000);
       } else {
-        button.innerHTML = '❌ No saved data';
+        button.innerHTML = '❌ No data';
         button.style.background = 'linear-gradient(135deg, #f44336 0%, #da190b 100%)';
         
         setTimeout(() => {
@@ -449,18 +741,16 @@ function addAutoFillButton() {
   document.body.appendChild(button);
 }
 
-// Jalankan saat halaman selesai load
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', addAutoFillButton);
 } else {
   addAutoFillButton();
 }
 
-// Re-add button jika halaman di-refresh via Google Forms navigation
 const observer = new MutationObserver(() => {
   if (!document.getElementById('auto-fill-btn')) {
     addAutoFillButton();
   }
 });
 
-observer.observe(document.body, { childList: true, subtree: true });
+observer.observe(document.body, { childList: true, subtree: true });  
