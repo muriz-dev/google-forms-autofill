@@ -1,6 +1,6 @@
 // Main content script for Google Forms Auto-Fill extension
 
-(function() {
+(function () {
   'use strict';
 
   const logger = createLogger('ContentScript');
@@ -191,16 +191,47 @@
               break;
 
             case 'saveFormData':
-              // Allow popup to provide data payload to save (preferred), otherwise detect and save
+              // Allow popup to provide data payload to save
               if (request.data && Array.isArray(request.data)) {
                 try {
-                  const setSuccess = await StorageHelper.set(STORAGE_KEYS.SAVED_FORM_DATA, request.data);
+                  // 1. Ambil data lama terlebih dahulu
+                  const existingData = await StorageHelper.get(STORAGE_KEYS.SAVED_FORM_DATA) || [];
+
+                  // 2. Buat Map untuk merging (menggunakan pertanyaan sebagai key unik)
+                  // Kita gunakan Map untuk memudahkan update jika ada perubahan value pada pertanyaan yang sama
+                  const dataMap = new Map();
+
+                  // Masukkan data lama ke Map
+                  existingData.forEach(field => {
+                    if (field && field.question) {
+                      dataMap.set(field.question, field);
+                    }
+                  });
+
+                  // 3. Masukkan/Update dengan data baru dari halaman saat ini
+                  request.data.forEach(field => {
+                    if (field && field.question) {
+                      // Kita overwrite entry lama dengan yang baru (karena user mungkin baru saja mengedit value di popup)
+                      dataMap.set(field.question, field);
+                    }
+                  });
+
+                  // 4. Konversi kembali ke Array
+                  const mergedData = Array.from(dataMap.values());
+
+                  // 5. Simpan data yang sudah digabungkan
+                  const setSuccess = await StorageHelper.set(STORAGE_KEYS.SAVED_FORM_DATA, mergedData);
+
+                  logger.info(`Merged data saved. Total fields: ${mergedData.length}`);
                   sendResponse({ success: setSuccess });
+
                 } catch (err) {
                   logger.error('Error saving provided form data:', err);
                   sendResponse({ success: false, error: err && err.message ? err.message : String(err) });
                 }
               } else {
+                // Fallback lama (jika tidak ada data payload) - Sebaiknya juga di-update ke logic merge jika perlu, 
+                // tapi biasanya flow ini jarang dipanggil jika lewat Popup.
                 const saveSuccess = await saveFormData();
                 sendResponse({ success: saveSuccess });
               }
