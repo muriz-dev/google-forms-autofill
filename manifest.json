@@ -22,7 +22,30 @@
   "content_scripts": [
     {
       "matches": ["https://docs.google.com/forms/*"],
-      "js": ["content/content.js"],
+      "js": [
+        "shared/constants.js",
+        "shared/storage-helper.js",
+        "utils/logger.js",
+        "content/utils/dom-utils.js",
+        "content/utils/event-utils.js",
+        "content/field-detectors/base-detector.js",
+        "content/field-detectors/text-detector.js",
+        "content/field-detectors/textarea-detector.js",
+        "content/field-detectors/radio-detector.js",
+        "content/field-detectors/checkbox-detector.js",
+        "content/field-detectors/dropdown-detector.js",
+        "content/field-detectors/date-detector.js",
+        "content/field-detectors/time-detector.js",
+        "content/field-fillers/base-filler.js",
+        "content/field-fillers/text-filler.js",
+        "content/field-fillers/textarea-filler.js",
+        "content/field-fillers/radio-filler.js",
+        "content/field-fillers/checkbox-filler.js",
+        "content/field-fillers/dropdown-filler.js",
+        "content/field-fillers/date-filler.js",
+        "content/field-fillers/time-filler.js",
+        "content/content.js"
+      ],
       "run_at": "document_idle"
     }
   ],
