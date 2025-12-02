@@ -403,30 +403,26 @@ async function loadSavedData() {
       savedStatus.textContent = `You have saved data for ${savedData.length} fields`;
       clearBtn.style.display = 'block';
 
+      fillBtn.disabled = false; 
+
       savedPreview.innerHTML = '';
       
       savedData.forEach(field => {
-        if (!field || !field.question) {
-          console.warn('Invalid field data:', field);
-          return;
-        }
-
+        if (!field || !field.question) return;
         const fieldDiv = document.createElement('div');
         fieldDiv.className = 'saved-field';
-
         const question = document.createElement('div');
         question.className = 'saved-field-question';
         question.textContent = field.question;
-
         const value = document.createElement('div');
         value.className = 'saved-field-value';
-
+        
         if (Array.isArray(field.value)) {
-          value.textContent = field.value.length > 0 ? field.value.join(', ') : '(empty)';
+            value.textContent = field.value.length > 0 ? field.value.join(', ') : '(empty)';
         } else if (field.value !== undefined && field.value !== null) {
-          value.textContent = field.value.toString() || '(empty)';
+            value.textContent = field.value.toString() || '(empty)';
         } else {
-          value.textContent = '(empty)';
+            value.textContent = '(empty)';
         }
 
         fieldDiv.appendChild(question);
@@ -439,6 +435,9 @@ async function loadSavedData() {
     } else {
       savedStatus.textContent = 'No saved data yet';
       clearBtn.style.display = 'none';
+      
+      fillBtn.disabled = true;
+      
       savedPreview.innerHTML = '';
       savedPreview.classList.remove('show');
     }
@@ -447,6 +446,7 @@ async function loadSavedData() {
     console.error('Error loading saved data:', error);
     savedStatus.textContent = 'Error loading saved data';
     clearBtn.style.display = 'none';
+    fillBtn.disabled = true; // Error safety
     savedPreview.classList.remove('show');
   }
 }
@@ -465,6 +465,7 @@ async function clearSavedData() {
       detectedFields = [];
       fieldsContainer.style.display = 'none';
       fieldsList.innerHTML = '';
+      
       fillBtn.disabled = true;
       
       // Update saved data display
@@ -482,7 +483,6 @@ async function clearSavedData() {
     showStatus('❌ Failed to clear data', 'error');
   }
 }
-
 // Show status message
 function showStatus(message, type = 'info') {
   statusMessage.textContent = message;
