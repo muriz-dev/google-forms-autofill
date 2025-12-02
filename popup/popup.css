@@ -306,6 +306,13 @@ footer {
   margin-top: auto;
 }
 
+.support {
+  font-size: 12px;
+  color: #e53935;
+  font-weight: bold;
+  margin-bottom: 6px;
+}
+
 .version {
   font-size: 11px;
   color: #999;

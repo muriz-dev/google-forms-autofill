@@ -130,17 +130,17 @@ async function detectFields() {
 
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
 
-    chrome.tabs.sendMessage(tab.id, { action: 'getFields' }, (response) => {
+    chrome.tabs.sendMessage(tab.id, { action: 'detectFields' }, (response) => {
       if (chrome.runtime.lastError) {
         showStatus('❌ Error: Could not connect to the page. Try refreshing the form.', 'error');
         detectBtn.disabled = false;
         return;
       }
 
-      if (response && response.fields && response.fields.length > 0) {
-        detectedFields = response.fields;
-        displayFields(response.fields);
-        showStatus(`✅ Detected ${response.fields.length} fields successfully`, 'success');
+      if (response && response.success && Array.isArray(response.data) && response.data.length > 0) {
+        detectedFields = response.data;
+        displayFields(response.data);
+        showStatus(`✅ Detected ${response.data.length} fields successfully`, 'success');
         fillBtn.disabled = false;
       } else {
         showStatus('⚠️ No fields detected. Make sure you\'re on a Google Forms page.', 'error');
@@ -161,7 +161,9 @@ function displayFields(fields) {
 
   fields.forEach((field, index) => {
     const fieldItem = createFieldInput(field, index);
-    fieldsList.appendChild(fieldItem);
+    if (fieldItem) {
+      fieldsList.appendChild(fieldItem);
+    }
   });
 
   fieldsContainer.style.display = 'block';
@@ -266,6 +268,33 @@ function createFieldInput(field, index) {
         inputElement.appendChild(opt);
       });
       break;
+
+    case 'date':
+      inputElement = document.createElement('input');
+      inputElement.type = 'date';
+      inputElement.className = 'field-input';
+      inputElement.value = field.value || '';
+      inputElement.dataset.index = index;
+      break;
+
+    case 'time':
+      inputElement = document.createElement('input');
+      inputElement.type = 'time';
+      inputElement.className = 'field-input';
+      inputElement.value = field.value || '';
+      inputElement.dataset.index = index;
+      break;
+
+    default:
+      // Fallback for unknown types - use text input
+      console.warn(`Unknown field type: ${field.type}, using text input as fallback`);
+      inputElement = document.createElement('input');
+      inputElement.type = 'text';
+      inputElement.className = 'field-input';
+      inputElement.placeholder = `Enter ${field.type} value...`;
+      inputElement.value = field.value || '';
+      inputElement.dataset.index = index;
+      break;
   }
 
   fieldDiv.appendChild(inputElement);
@@ -278,31 +307,56 @@ async function saveData() {
     const updatedFields = detectedFields.map((field, index) => {
       const fieldCopy = { ...field };
 
-      if (field.type === 'text' || field.type === 'textarea') {
-        const input = document.querySelector(`[data-index="${index}"]`);
-        fieldCopy.value = input ? input.value : '';
-      } else if (field.type === 'radio') {
-        const selected = document.querySelector(`input[name="radio-${index}"]:checked`);
-        fieldCopy.value = selected ? selected.value : '';
-      } else if (field.type === 'checkbox') {
-        const checkboxes = document.querySelectorAll(`input[type="checkbox"][data-index="${index}"]:checked`);
-        fieldCopy.value = Array.from(checkboxes).map(cb => cb.value);
-      } else if (field.type === 'dropdown') {
-        const select = document.querySelector(`select[data-index="${index}"]`);
-        fieldCopy.value = select ? select.value : '';
+      switch (field.type) {
+        case 'text':
+        case 'textarea':
+        case 'date':
+        case 'time':
+          const input = document.querySelector(`[data-index="${index}"]`);
+          fieldCopy.value = input ? input.value : '';
+          break;
+
+        case 'radio':
+          const selected = document.querySelector(`input[name="radio-${index}"]:checked`);
+          fieldCopy.value = selected ? selected.value : '';
+          break;
+
+        case 'checkbox':
+          const checkboxes = document.querySelectorAll(`input[type="checkbox"][data-index="${index}"]:checked`);
+          fieldCopy.value = Array.from(checkboxes).map(cb => cb.value);
+          break;
+
+        case 'dropdown':
+          const select = document.querySelector(`select[data-index="${index}"]`);
+          fieldCopy.value = select ? select.value : '';
+          break;
+
+        default:
+          // Fallback for unknown types
+          const fallbackInput = document.querySelector(`[data-index="${index}"]`);
+          fieldCopy.value = fallbackInput ? fallbackInput.value : '';
+          break;
       }
 
       return fieldCopy;
     });
 
-    const success = await StorageHelper.set('savedFormData', updatedFields);
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
 
-    if (success) {
-      showStatus('✅ Data saved successfully!', 'success');
-      await loadSavedData();
-    } else {
-      showStatus('❌ Failed to save data', 'error');
-    }
+    chrome.tabs.sendMessage(tab.id, { action: 'saveFormData', data: updatedFields }, async (response) => {
+      if (chrome.runtime.lastError) {
+        console.error('Error sending saveFormData to content script:', chrome.runtime.lastError);
+        showStatus('❌ Error: Could not save data to the page. Try refreshing the form.', 'error');
+        return;
+      }
+
+      if (response && response.success) {
+        showStatus('✅ Data saved successfully!', 'success');
+        await loadSavedData();
+      } else {
+        showStatus('❌ Failed to save data', 'error');
+      }
+    });
   } catch (error) {
     console.error('Error saving data:', error);
     showStatus('❌ Failed to save data', 'error');
