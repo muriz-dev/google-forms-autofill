@@ -1,102 +1,41 @@
 # Google Forms Auto-Fill Extension
 
-Chrome extension untuk mengisi Google Forms secara otomatis dengan data yang tersimpan.
+![Version](https://img.shields.io/badge/version-1.0.0-blue)
+![License](https://img.shields.io/badge/license-MIT-yellow)
 
-## Features (MVP)
+A simple Chrome extension to auto-fill Google Forms using saved data. Built with Vanilla JS (Manifest V3).
 
-- 🚧 Deteksi field di Google Forms (text, textarea, radio, checkbox)
-- 🚧 Save form data ke Chrome Storage (in progress)
-- 🚧 Auto-fill dengan satu klik (in progress)
-- 🚧 Manage saved data via popup UI (planned)
+## ✨ Features
 
-## Tech Stack
+- **Auto-Fill:** Supports Text, Textarea, Radio, Checkbox, Dropdown, Date, and Time inputs.
+- **Auto-Detect:** Automatically scans and identifies form fields.
+- **Storage:** Saves form data to Chrome Storage (persistent across sessions).
+- **UI:** Includes a Popup manager and Floating Action Button (FAB) for quick access.
 
-- Vanilla JavaScript
-- Chrome Extension Manifest V3
-- Chrome Storage API
+## ⚠️ Limitations
 
-## Installation (Development)
+- **Not Supported Yet:** Multiple Choice Grid, Checkbox Grid, File Upload, and Linear Scale.
+- **Date Format:** Use ISO (`YYYY-MM-DD`) or `DD/MM/YYYY`.
+- **Time Format:** Use 24-hour (`HH:MM`).
 
-1. Clone repository ini
-```bash
-git clone https://github.com/username/google-forms-autofill.git
-cd google-forms-autofill
-```
+## 📦 Installation
 
-2. Buka Chrome dan navigasi ke `chrome://extensions/`
+1. Clone this repo: `git clone https://github.com/username/google-forms-autofill.git`
+2. Open `chrome://extensions/` in Chrome.
+3. Enable **Developer mode** (top right corner).
+4. Click **Load unpacked** and select this project folder.
 
-3. Enable "Developer mode" (toggle di kanan atas)
+## 🚀 Usage
 
-4. Klik "Load unpacked"
+1. Open the target Google Form.
+2. Click the **🤖 Auto-Fill** floating button or the extension icon.
+3. **Detect Fields** → Edit values → **Save**.
+4. Click **Fill Form** to execute.
 
-5. Pilih folder project ini
+## 🤝 Contributing
 
-6. Extension akan muncul di toolbar Chrome
+Pull requests are welcome! The current focus is on implementing **Grid Support**.
 
-## Usage
+## 📄 License
 
-1. Buka Google Forms apapun
-2. Klik button "⚡ Auto Fill" yang muncul di kanan atas halaman
-3. (Future) Atau klik icon extension untuk manage data
-
-## Project Structure
-```
-google-forms-autofill/
-├── manifest.json           # Extension configuration
-├── content/
-│   └── content.js         # Script yang berjalan di Google Forms pages (coming soon)
-├── popup/                 # Extension popup UI (coming soon)
-│   ├── popup.html
-│   ├── popup.css
-│   └── popup.js
-├── background/            # Background service worker (coming soon)
-│   └── background.js
-├── icons/                 # Extension icons (placeholder)
-│   ├── icon16.png
-│   ├── icon48.png
-│   └── icon128.png
-└── utils/                 # Helper utilities (coming soon)
-    └── storage.js
-```
-
-## Development Progress
-
-- [x] Step 1: Project setup & manifest configuration
-- [ ] Step 2: Content script untuk deteksi & fill form fields
-- [ ] Step 3: Popup UI untuk manage data
-- [ ] Step 4: Storage management
-- [ ] Step 5: Advanced features (multiple profiles, import/export)
-
-## Known Issues
-
-- Belum support dropdown select
-- Selector generation perlu improvement untuk form yang kompleks
-
-## Contributing
-
-Project ini sedang dalam tahap development awal. Contributions welcome!
-
-## License
-
-MIT License
-
----
-
-**Author:** Muriz
-**Created:** November 2025
-```
-
-#### 1.3 Buat placeholder icons
-
-Karena belum ada icon, kita buat placeholder sederhana. Buat file `icons/placeholder-icon.txt`:
-```
-# Placeholder Icons
-
-Untuk sementara, download icon placeholder dari:
-- https://via.placeholder.com/16x16.png → simpan sebagai icon16.png
-- https://via.placeholder.com/48x48.png → simpan sebagai icon48.png
-- https://via.placeholder.com/128x128.png → simpan sebagai icon128.png
-
-Atau gunakan icon generator online seperti:
-- https://www.favicon-generator.org/
-- https://favicon.io/
+MIT © Muriz
