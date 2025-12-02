@@ -24,25 +24,17 @@
 
       let input = null;
 
-      // Strategy 1: Find by aria-labelledby
-      if (field.ariaLabelledBy) {
-        input = document.querySelector(`input[type="text"][aria-labelledby="${field.ariaLabelledBy}"]`);
-      }
+      const allInputs = document.querySelectorAll(SELECTORS.TEXT_INPUT);
+      for (const elem of allInputs) {
+        // Cek apakah input ini visible (untuk menghindari hidden fields yang mungkin tertinggal)
+        if (!DOMUtils.isVisible(elem)) continue;
 
-      // Strategy 2: Find by data-params
-      if (!input && field.dataParams) {
-        input = document.querySelector(`input[type="text"][data-params="${field.dataParams}"]`);
-      }
-
-      // Strategy 3: Find by question text
-      if (!input) {
-        const allInputs = document.querySelectorAll(SELECTORS.TEXT_INPUT);
-        for (const elem of allInputs) {
-          const question = DOMUtils.getQuestionText(elem);
-          if (question === field.question) {
-            input = elem;
-            break;
-          }
+        const question = DOMUtils.getQuestionText(elem);
+        
+        // Exact Match
+        if (question === field.question) {
+          input = elem;
+          break;
         }
       }
 

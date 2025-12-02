@@ -23,26 +23,17 @@
       }
 
       let textarea = null;
+      
+      const allTextareas = document.querySelectorAll(SELECTORS.TEXTAREA);
+      for (const elem of allTextareas) {
+        // Cek visibilitas
+        if (!DOMUtils.isVisible(elem)) continue;
 
-      // Strategy 1: Find by aria-labelledby
-      if (field.ariaLabelledBy) {
-        textarea = document.querySelector(`textarea[aria-labelledby="${field.ariaLabelledBy}"]`);
-      }
-
-      // Strategy 2: Find by data-params
-      if (!textarea && field.dataParams) {
-        textarea = document.querySelector(`textarea[data-params="${field.dataParams}"]`);
-      }
-
-      // Strategy 3: Find by question text
-      if (!textarea) {
-        const allTextareas = document.querySelectorAll(SELECTORS.TEXTAREA);
-        for (const elem of allTextareas) {
-          const question = DOMUtils.getQuestionText(elem);
-          if (question === field.question) {
-            textarea = elem;
-            break;
-          }
+        const question = DOMUtils.getQuestionText(elem);
+        
+        if (question === field.question) {
+          textarea = elem;
+          break;
         }
       }
 
