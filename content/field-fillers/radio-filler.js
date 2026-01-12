@@ -1,6 +1,28 @@
 // Filler for single-selection radio button fields
-(function(global) {
+(function (global) {
   'use strict';
+
+  function getCheckedRadio(group) {
+    return group.querySelector(
+      '[role="radio"][aria-checked="true"]'
+    );
+  }
+
+  /**
+   * Check whether this radio group is a Google Forms rating
+   */
+  function isGoogleFormsRating(group) {
+    return group.querySelector('[data-ratingscale]') !== null;
+  }
+
+  /**
+   * Get current rating value from Google Forms rating component
+   */
+  function getCurrentGoogleFormsRating(group) {
+    return group.querySelectorAll(
+      '[role="radio"][aria-checked="true"]'
+    ).length;
+  }
 
   /**
    * Radio Button Filler
@@ -62,12 +84,44 @@
     async _selectOption(group, value, question) {
       const radios = group.querySelectorAll(SELECTORS.RADIO);
 
+      // Google Forms rating
+      if (isGoogleFormsRating(group)) {
+        const currentRating = getCurrentGoogleFormsRating(group);
+
+        if (Number(value) === currentRating) {
+          this.logger.info(
+            `Skipping rating "${question}" because value unchanged (${value})`
+          );
+          return true;
+        }
+      }
+      // Normal radio (single selection)
+      else {
+        const checkedRadio = getCheckedRadio(group);
+
+        if (checkedRadio) {
+          const checkedValue =
+            checkedRadio.getAttribute('data-value') ||
+            checkedRadio.getAttribute('aria-label') ||
+            checkedRadio.innerText.trim();
+
+          if (String(checkedValue) === String(value)) {
+            this.logger.info(
+              `Skipping radio "${question}" because value unchanged (${value})`
+            );
+            return true;
+          }
+        }
+      }
+
+      // Perform click if value is different
       for (const radio of radios) {
         const label =
+          radio.getAttribute('data-value') ||
           radio.getAttribute('aria-label') ||
           radio.innerText.trim();
 
-        if (label === value) {
+        if (String(label) === String(value)) {
           await this._forceClickRadio(radio);
           return true;
         }
