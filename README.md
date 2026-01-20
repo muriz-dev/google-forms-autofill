@@ -14,9 +14,7 @@ A simple Chrome extension to auto-fill Google Forms using saved data. Built with
 
 ## ⚠️ Limitations
 
-- **Not Supported Yet:** Multiple Choice Grid, Checkbox Grid, File Upload, and Linear Scale.
-- **Date Format:** Use ISO (`YYYY-MM-DD`) or `DD/MM/YYYY`.
-- **Time Format:** Use 24-hour (`HH:MM`).
+- **Not Supported Yet:** Multiple Choice Grid, Checkbox Grid, and File Upload.
 
 ## 📦 Installation
 
@@ -37,5 +35,7 @@ A simple Chrome extension to auto-fill Google Forms using saved data. Built with
 Pull requests are welcome! The current focus is on implementing **Grid Support**.
 
 ## 📄 License
+
+Icons from FLATICON.
 
 MIT © Muriz
