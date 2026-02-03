@@ -285,6 +285,75 @@ function createFieldInput(field, index) {
       inputElement.dataset.index = index;
       break;
 
+    case 'radio_grid':
+      inputElement = document.createElement('div');
+      inputElement.className = 'grid-container';
+      inputElement.dataset.index = index;
+      
+      // Display grid structure
+      // Note: metadata is spread at top level by base detector
+      if (field.rows && field.columns) {
+        const { rows, columns } = field;
+        
+        // Create table for grid display
+        const table = document.createElement('table');
+        table.className = 'grid-table';
+        
+        // Header row with column names
+        const thead = document.createElement('thead');
+        const headerRow = document.createElement('tr');
+        const emptyHeader = document.createElement('th');
+        headerRow.appendChild(emptyHeader);
+        
+        columns.forEach(col => {
+          const th = document.createElement('th');
+          th.textContent = col;
+          th.className = 'grid-column-header';
+          headerRow.appendChild(th);
+        });
+        thead.appendChild(headerRow);
+        table.appendChild(thead);
+        
+        // Body with rows
+        const tbody = document.createElement('tbody');
+        rows.forEach(row => {
+          const tr = document.createElement('tr');
+          
+          // Row label
+          const rowHeader = document.createElement('td');
+          rowHeader.className = 'grid-row-header';
+          rowHeader.textContent = row.label;
+          tr.appendChild(rowHeader);
+          
+          // Radio buttons for each column
+          columns.forEach(col => {
+            const td = document.createElement('td');
+            td.className = 'grid-cell';
+            
+            const radio = document.createElement('input');
+            radio.type = 'radio';
+            radio.name = `grid-${index}-${row.label}`;
+            radio.value = col;
+            radio.dataset.row = row.label;
+            radio.dataset.index = index;
+            radio.checked = field.value && field.value[row.label] === col;
+            
+            td.appendChild(radio);
+            tr.appendChild(td);
+          });
+          
+          tbody.appendChild(tr);
+        });
+        table.appendChild(tbody);
+        inputElement.appendChild(table);
+      } else {
+        const errorMsg = document.createElement('p');
+        errorMsg.textContent = 'Grid structure not available';
+        errorMsg.className = 'error-text';
+        inputElement.appendChild(errorMsg);
+      }
+      break;
+
     default:
       // Fallback for unknown types - use text input
       console.warn(`Unknown field type: ${field.type}, using text input as fallback`);
@@ -329,6 +398,19 @@ async function saveData() {
         case 'dropdown':
           const select = document.querySelector(`select[data-index="${index}"]`);
           fieldCopy.value = select ? select.value : '';
+          break;
+
+        case 'radio_grid':
+          // Collect all selected values for the grid
+          const gridValue = {};
+          const gridRadios = document.querySelectorAll(`input[type="radio"][data-index="${index}"]:checked`);
+          gridRadios.forEach(radio => {
+            const row = radio.dataset.row;
+            if (row) {
+              gridValue[row] = radio.value;
+            }
+          });
+          fieldCopy.value = gridValue;
           break;
 
         default:
@@ -419,6 +501,14 @@ async function loadSavedData() {
         
         if (Array.isArray(field.value)) {
             value.textContent = field.value.length > 0 ? field.value.join(', ') : '(empty)';
+        } else if (field.type === 'radio_grid' && typeof field.value === 'object' && field.value !== null) {
+            // Handle grid values specially
+            const entries = Object.entries(field.value);
+            if (entries.length > 0) {
+                value.textContent = entries.map(([row, col]) => `${row}: ${col}`).join('; ');
+            } else {
+                value.textContent = '(empty)';
+            }
         } else if (field.value !== undefined && field.value !== null) {
             value.textContent = field.value.toString() || '(empty)';
         } else {

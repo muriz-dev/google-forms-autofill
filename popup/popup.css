@@ -344,3 +344,57 @@ footer {
 .tab-content::-webkit-scrollbar-thumb:hover {
   background: #555;
 }
+/* Grid Table Styles */
+.grid-container {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.grid-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  margin-top: 8px;
+}
+
+.grid-table th,
+.grid-table td {
+  padding: 8px;
+  text-align: center;
+  border: 1px solid #e0e0e0;
+}
+
+.grid-table thead th {
+  background: #f5f5f5;
+  font-weight: 600;
+  color: #555;
+}
+
+.grid-column-header {
+  font-size: 11px;
+  min-width: 60px;
+}
+
+.grid-row-header {
+  text-align: left;
+  font-weight: 500;
+  background: #fafafa;
+  color: #333;
+  min-width: 100px;
+}
+
+.grid-cell {
+  background: white;
+}
+
+.grid-cell input[type="radio"] {
+  cursor: pointer;
+  width: 16px;
+  height: 16px;
+}
+
+.error-text {
+  color: #e53935;
+  font-size: 12px;
+  font-style: italic;
+}

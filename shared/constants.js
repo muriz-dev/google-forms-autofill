@@ -14,8 +14,8 @@
     DROPDOWN: 'dropdown',
     DATE: 'date',
     TIME: 'time',
-    // Future field types (not yet implemented)
     RADIO_GRID: 'radio_grid',       // Multiple Choice Grid
+    // Future field types (not yet implemented)
     CHECKBOX_GRID: 'checkbox_grid'  // Checkbox Grid
   };
 
