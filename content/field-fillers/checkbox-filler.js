@@ -71,6 +71,27 @@
       let checked = 0;
       let failed = 0;
 
+      // First, uncheck all currently checked boxes that are not in the new values
+      for (const checkbox of checkboxes) {
+        const isChecked = checkbox.getAttribute('aria-checked') === 'true';
+        if (isChecked) {
+          const checkboxValue = checkbox.getAttribute('data-answer-value') || 
+                                checkbox.getAttribute('aria-label') || '';
+          const normalizedCheckboxValue = this._normalizeText(checkboxValue).toLowerCase();
+          
+          // Check if this checkbox should remain checked
+          const shouldStayChecked = valuesToCheck.some(value => 
+            this._normalizeText(value).toLowerCase() === normalizedCheckboxValue
+          );
+          
+          // If it shouldn't be checked, uncheck it
+          if (!shouldStayChecked) {
+            await this._uncheckCheckbox(checkbox);
+          }
+        }
+      }
+
+      // Now check all the boxes that should be checked
       for (const value of valuesToCheck) {
         const checkbox = this._findCheckboxByValue(checkboxes, value);
 
@@ -80,7 +101,7 @@
           continue;
         }
 
-        const success = await this._clickCheckbox(checkbox);
+        const success = await this._checkCheckbox(checkbox);
         if (success) {
           checked++;
         } else {
@@ -152,12 +173,12 @@
     }
 
     /**
-     * Click a checkbox if not already checked
-     * @param {HTMLElement} checkbox - Checkbox element to click
+     * Check a checkbox if not already checked
+     * @param {HTMLElement} checkbox - Checkbox element to check
      * @returns {Promise<boolean>} - Success status
      * @private
      */
-    async _clickCheckbox(checkbox) {
+    async _checkCheckbox(checkbox) {
       const isChecked = checkbox.getAttribute('aria-checked') === 'true';
 
       if (isChecked) {
@@ -188,6 +209,41 @@
         await this.sleep(TIMING.MEDIUM_DELAY);
 
         return checkbox.getAttribute('aria-checked') === 'true';
+      }
+
+      return false;
+    }
+
+    /**
+     * Uncheck a checkbox if currently checked
+     * @param {HTMLElement} checkbox - Checkbox element to uncheck
+     * @returns {Promise<boolean>} - Success status
+     * @private
+     */
+    async _uncheckCheckbox(checkbox) {
+      const isChecked = checkbox.getAttribute('aria-checked') === 'true';
+
+      if (!isChecked) {
+        return true; // Already unchecked
+      }
+
+      // Click the checkbox to uncheck it
+      checkbox.click();
+      await this.sleep(TIMING.MEDIUM_DELAY);
+
+      // Verify
+      const nowUnchecked = checkbox.getAttribute('aria-checked') === 'false';
+      if (nowUnchecked) {
+        return true;
+      }
+
+      // Retry: click parent label
+      const label = checkbox.closest('label');
+      if (label) {
+        label.click();
+        await this.sleep(TIMING.MEDIUM_DELAY);
+
+        return checkbox.getAttribute('aria-checked') === 'false';
       }
 
       return false;
