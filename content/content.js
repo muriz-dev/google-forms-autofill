@@ -36,7 +36,8 @@
       dropdown: new DropdownDetector(),
       date: new DateDetector(),
       time: new TimeDetector(),
-      radio_grid: new RadioGridDetector()
+      radio_grid: new RadioGridDetector(),
+      checkbox_grid: new CheckboxGridDetector()
     };
 
     // Initialize fillers
@@ -48,7 +49,8 @@
       dropdown: new DropdownFiller(),
       date: new DateFiller(),
       time: new TimeFiller(),
-      radio_grid: new RadioGridFiller()
+      radio_grid: new RadioGridFiller(),
+      checkbox_grid: new CheckboxGridFiller()
     };
 
     // Setup event listeners and create UI

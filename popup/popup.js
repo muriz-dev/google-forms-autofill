@@ -354,6 +354,75 @@ function createFieldInput(field, index) {
       }
       break;
 
+    case 'checkbox_grid':
+      inputElement = document.createElement('div');
+      inputElement.className = 'grid-container';
+      inputElement.dataset.index = index;
+      
+      // Display grid structure
+      // Note: metadata is spread at top level by base detector
+      if (field.rows && field.columns) {
+        const { rows, columns } = field;
+        
+        // Create table for grid display
+        const table = document.createElement('table');
+        table.className = 'grid-table';
+        
+        // Header row with column names
+        const thead = document.createElement('thead');
+        const headerRow = document.createElement('tr');
+        const emptyHeader = document.createElement('th');
+        headerRow.appendChild(emptyHeader);
+        
+        columns.forEach(col => {
+          const th = document.createElement('th');
+          th.textContent = col;
+          th.className = 'grid-column-header';
+          headerRow.appendChild(th);
+        });
+        thead.appendChild(headerRow);
+        table.appendChild(thead);
+        
+        // Body with rows
+        const tbody = document.createElement('tbody');
+        rows.forEach(row => {
+          const tr = document.createElement('tr');
+          
+          // Row label
+          const rowHeader = document.createElement('td');
+          rowHeader.className = 'grid-row-header';
+          rowHeader.textContent = row.label;
+          tr.appendChild(rowHeader);
+          
+          // Checkboxes for each column
+          columns.forEach(col => {
+            const td = document.createElement('td');
+            td.className = 'grid-cell';
+            
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.name = `grid-${index}-${row.label}-${col}`;
+            checkbox.value = col;
+            checkbox.dataset.row = row.label;
+            checkbox.dataset.index = index;
+            checkbox.checked = field.value && Array.isArray(field.value[row.label]) && field.value[row.label].includes(col);
+            
+            td.appendChild(checkbox);
+            tr.appendChild(td);
+          });
+          
+          tbody.appendChild(tr);
+        });
+        table.appendChild(tbody);
+        inputElement.appendChild(table);
+      } else {
+        const errorMsg = document.createElement('p');
+        errorMsg.textContent = 'Grid structure not available';
+        errorMsg.className = 'error-text';
+        inputElement.appendChild(errorMsg);
+      }
+      break;
+
     default:
       // Fallback for unknown types - use text input
       console.warn(`Unknown field type: ${field.type}, using text input as fallback`);
@@ -411,6 +480,26 @@ async function saveData() {
             }
           });
           fieldCopy.value = gridValue;
+          break;
+
+        case 'checkbox_grid':
+          // Collect all checked values for the grid (arrays per row)
+          const checkboxGridValue = {};
+          
+          // Group checkboxes by row
+          const allCheckboxes = document.querySelectorAll(`input[type="checkbox"][data-index="${index}"]`);
+          allCheckboxes.forEach(checkbox => {
+            const row = checkbox.dataset.row;
+            if (row) {
+              if (!checkboxGridValue[row]) {
+                checkboxGridValue[row] = [];
+              }
+              if (checkbox.checked) {
+                checkboxGridValue[row].push(checkbox.value);
+              }
+            }
+          });
+          fieldCopy.value = checkboxGridValue;
           break;
 
         default:
@@ -502,10 +591,21 @@ async function loadSavedData() {
         if (Array.isArray(field.value)) {
             value.textContent = field.value.length > 0 ? field.value.join(', ') : '(empty)';
         } else if (field.type === 'radio_grid' && typeof field.value === 'object' && field.value !== null) {
-            // Handle grid values specially
+            // Handle radio grid values
             const entries = Object.entries(field.value);
             if (entries.length > 0) {
                 value.textContent = entries.map(([row, col]) => `${row}: ${col}`).join('; ');
+            } else {
+                value.textContent = '(empty)';
+            }
+        } else if (field.type === 'checkbox_grid' && typeof field.value === 'object' && field.value !== null) {
+            // Handle checkbox grid values (arrays per row)
+            const entries = Object.entries(field.value);
+            if (entries.length > 0) {
+                value.textContent = entries
+                    .filter(([row, cols]) => Array.isArray(cols) && cols.length > 0)
+                    .map(([row, cols]) => `${row}: ${cols.join(', ')}`)
+                    .join('; ');
             } else {
                 value.textContent = '(empty)';
             }
