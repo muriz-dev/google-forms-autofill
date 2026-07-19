@@ -252,13 +252,13 @@ function createFieldInput(field, index) {
       inputElement = document.createElement('select');
       inputElement.className = 'field-select';
       inputElement.dataset.index = index;
-      
+
       // Add placeholder option
       const placeholderOption = document.createElement('option');
       placeholderOption.value = '';
       placeholderOption.textContent = '-- Select an option --';
       inputElement.appendChild(placeholderOption);
-      
+
       // Add all options
       field.options.forEach(option => {
         const opt = document.createElement('option');
@@ -289,22 +289,22 @@ function createFieldInput(field, index) {
       inputElement = document.createElement('div');
       inputElement.className = 'grid-container';
       inputElement.dataset.index = index;
-      
+
       // Display grid structure
       // Note: metadata is spread at top level by base detector
       if (field.rows && field.columns) {
         const { rows, columns } = field;
-        
+
         // Create table for grid display
         const table = document.createElement('table');
         table.className = 'grid-table';
-        
+
         // Header row with column names
         const thead = document.createElement('thead');
         const headerRow = document.createElement('tr');
         const emptyHeader = document.createElement('th');
         headerRow.appendChild(emptyHeader);
-        
+
         columns.forEach(col => {
           const th = document.createElement('th');
           th.textContent = col;
@@ -313,23 +313,23 @@ function createFieldInput(field, index) {
         });
         thead.appendChild(headerRow);
         table.appendChild(thead);
-        
+
         // Body with rows
         const tbody = document.createElement('tbody');
         rows.forEach(row => {
           const tr = document.createElement('tr');
-          
+
           // Row label
           const rowHeader = document.createElement('td');
           rowHeader.className = 'grid-row-header';
           rowHeader.textContent = row.label;
           tr.appendChild(rowHeader);
-          
+
           // Radio buttons for each column
           columns.forEach(col => {
             const td = document.createElement('td');
             td.className = 'grid-cell';
-            
+
             const radio = document.createElement('input');
             radio.type = 'radio';
             radio.name = `grid-${index}-${row.label}`;
@@ -337,11 +337,11 @@ function createFieldInput(field, index) {
             radio.dataset.row = row.label;
             radio.dataset.index = index;
             radio.checked = field.value && field.value[row.label] === col;
-            
+
             td.appendChild(radio);
             tr.appendChild(td);
           });
-          
+
           tbody.appendChild(tr);
         });
         table.appendChild(tbody);
@@ -358,22 +358,22 @@ function createFieldInput(field, index) {
       inputElement = document.createElement('div');
       inputElement.className = 'grid-container';
       inputElement.dataset.index = index;
-      
+
       // Display grid structure
       // Note: metadata is spread at top level by base detector
       if (field.rows && field.columns) {
         const { rows, columns } = field;
-        
+
         // Create table for grid display
         const table = document.createElement('table');
         table.className = 'grid-table';
-        
+
         // Header row with column names
         const thead = document.createElement('thead');
         const headerRow = document.createElement('tr');
         const emptyHeader = document.createElement('th');
         headerRow.appendChild(emptyHeader);
-        
+
         columns.forEach(col => {
           const th = document.createElement('th');
           th.textContent = col;
@@ -382,23 +382,23 @@ function createFieldInput(field, index) {
         });
         thead.appendChild(headerRow);
         table.appendChild(thead);
-        
+
         // Body with rows
         const tbody = document.createElement('tbody');
         rows.forEach(row => {
           const tr = document.createElement('tr');
-          
+
           // Row label
           const rowHeader = document.createElement('td');
           rowHeader.className = 'grid-row-header';
           rowHeader.textContent = row.label;
           tr.appendChild(rowHeader);
-          
+
           // Checkboxes for each column
           columns.forEach(col => {
             const td = document.createElement('td');
             td.className = 'grid-cell';
-            
+
             const checkbox = document.createElement('input');
             checkbox.type = 'checkbox';
             checkbox.name = `grid-${index}-${row.label}-${col}`;
@@ -406,11 +406,11 @@ function createFieldInput(field, index) {
             checkbox.dataset.row = row.label;
             checkbox.dataset.index = index;
             checkbox.checked = field.value && Array.isArray(field.value[row.label]) && field.value[row.label].includes(col);
-            
+
             td.appendChild(checkbox);
             tr.appendChild(td);
           });
-          
+
           tbody.appendChild(tr);
         });
         table.appendChild(tbody);
@@ -485,7 +485,7 @@ async function saveData() {
         case 'checkbox_grid':
           // Collect all checked values for the grid (arrays per row)
           const checkboxGridValue = {};
-          
+
           // Group checkboxes by row
           const allCheckboxes = document.querySelectorAll(`input[type="checkbox"][data-index="${index}"]`);
           allCheckboxes.forEach(checkbox => {
@@ -537,18 +537,11 @@ async function saveData() {
 // Fill form with saved data
 async function fillForm() {
   try {
-    const savedData = await StorageHelper.get('savedFormData');
-
-    if (!savedData || !Array.isArray(savedData) || savedData.length === 0) {
-      showStatus('⚠️ No saved data found. Please save data first.', 'error');
-      return;
-    }
-
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
 
+    // Send empty fillForm message so content script resolves it by current formId
     chrome.tabs.sendMessage(tab.id, {
-      action: 'fillForm',
-      data: savedData
+      action: 'fillForm'
     }, (response) => {
       if (chrome.runtime.lastError) {
         showStatus('❌ Error: Could not connect to the page', 'error');
@@ -557,6 +550,8 @@ async function fillForm() {
 
       if (response && response.success) {
         showStatus('✅ Form filled successfully!', 'success');
+      } else if (response && response.error) {
+        showStatus(`⚠️ ${response.error}`, 'error');
       }
     });
   } catch (error) {
@@ -568,70 +563,139 @@ async function fillForm() {
 // Load and display saved data
 async function loadSavedData() {
   try {
-    const savedData = await StorageHelper.get('savedFormData');
+    let allData = await StorageHelper.get('savedFormData');
 
-    if (savedData && Array.isArray(savedData) && savedData.length > 0) {
-      savedStatus.textContent = `You have saved data for ${savedData.length} fields`;
+    // Handle old format migration for display just in case
+    if (Array.isArray(allData)) {
+      allData = { 'legacy': { title: 'Legacy Form Data', fields: allData } };
+    }
+
+    if (allData && typeof allData === 'object' && Object.keys(allData).length > 0) {
+      const formKeys = Object.keys(allData);
+
+      let totalFields = 0;
+      formKeys.forEach(k => totalFields += allData[k].fields ? allData[k].fields.length : 0);
+
+      savedStatus.textContent = `You have saved data for ${totalFields} fields across ${formKeys.length} form(s)`;
       clearBtn.style.display = 'block';
 
-      fillBtn.disabled = false; 
+      fillBtn.disabled = false;
 
       savedPreview.innerHTML = '';
-      
-      savedData.forEach(field => {
-        if (!field || !field.question) return;
-        const fieldDiv = document.createElement('div');
-        fieldDiv.className = 'saved-field';
-        const question = document.createElement('div');
-        question.className = 'saved-field-question';
-        question.textContent = field.question;
-        const value = document.createElement('div');
-        value.className = 'saved-field-value';
-        
-        if (Array.isArray(field.value)) {
-            value.textContent = field.value.length > 0 ? field.value.join(', ') : '(empty)';
-        } else if (field.type === 'radio_grid' && typeof field.value === 'object' && field.value !== null) {
-            // Handle radio grid values
-            const entries = Object.entries(field.value);
-            if (entries.length > 0) {
-                value.textContent = entries.map(([row, col]) => `${row}: ${col}`).join('; ');
-            } else {
-                value.textContent = '(empty)';
-            }
-        } else if (field.type === 'checkbox_grid' && typeof field.value === 'object' && field.value !== null) {
-            // Handle checkbox grid values (arrays per row)
-            const entries = Object.entries(field.value);
-            if (entries.length > 0) {
-                value.textContent = entries
-                    .filter(([row, cols]) => Array.isArray(cols) && cols.length > 0)
-                    .map(([row, cols]) => `${row}: ${cols.join(', ')}`)
-                    .join('; ');
-            } else {
-                value.textContent = '(empty)';
-            }
-        } else if (field.value !== undefined && field.value !== null) {
-            value.textContent = field.value.toString() || '(empty)';
-        } else {
-            value.textContent = '(empty)';
-        }
 
-        fieldDiv.appendChild(question);
-        fieldDiv.appendChild(value);
-        savedPreview.appendChild(fieldDiv);
-      });
+      for (const formId of formKeys) {
+        const formProfile = allData[formId];
+        const fields = formProfile.fields || [];
+
+        if (fields.length === 0) continue;
+
+        const section = document.createElement('div');
+        section.className = 'form-section';
+        section.style.marginBottom = '20px';
+        section.style.border = '1px solid #ddd';
+        section.style.borderRadius = '8px';
+        section.style.padding = '10px';
+
+        const header = document.createElement('div');
+        header.style.display = 'flex';
+        header.style.justifyContent = 'space-between';
+        header.style.alignItems = 'center';
+        header.style.marginBottom = '10px';
+        header.style.borderBottom = '1px solid #eee';
+        header.style.paddingBottom = '5px';
+
+        const headerInfo = document.createElement('div');
+        headerInfo.style.display = 'flex';
+        headerInfo.style.flexDirection = 'column';
+        headerInfo.style.gap = '2px';
+
+        const title = document.createElement('h3');
+        title.textContent = formProfile.title || 'Unknown Form';
+        title.style.margin = '0';
+        title.style.fontSize = '14px';
+
+        const formLink = document.createElement('a');
+        formLink.href = formProfile.url || `https://docs.google.com/forms/d/e/${formId}/viewform`;
+        formLink.textContent = 'Buka Form ↗';
+        formLink.style.marginTop = '12px';
+        formLink.style.fontSize = '12px';
+        formLink.style.color = '#1a73e8';
+        formLink.style.textDecoration = 'none';
+        formLink.target = '_blank';
+
+        headerInfo.appendChild(title);
+        headerInfo.appendChild(formLink);
+
+        const deleteBtn = document.createElement('button');
+        deleteBtn.textContent = '🗑️ Delete';
+        deleteBtn.className = 'btn btn-danger btn-sm';
+        deleteBtn.style.padding = '4px 8px';
+        deleteBtn.style.fontSize = '12px';
+        deleteBtn.onclick = async () => {
+          if (confirm(`Delete data for "${formProfile.title}"?`)) {
+            try {
+              const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+              chrome.tabs.sendMessage(tab.id, { action: 'clearData', formId: formId }, (res) => {
+                loadSavedData();
+              });
+            } catch (e) { console.error(e); }
+          }
+        };
+
+        header.appendChild(headerInfo);
+        header.appendChild(deleteBtn);
+        section.appendChild(header);
+
+        fields.forEach(field => {
+          if (!field || !field.question) return;
+          const fieldDiv = document.createElement('div');
+          fieldDiv.className = 'saved-field';
+          const question = document.createElement('div');
+          question.className = 'saved-field-question';
+          question.textContent = field.question;
+          const value = document.createElement('div');
+          value.className = 'saved-field-value';
+          value.style.marginTop = '12px';
+          value.style.fontSize = '12px';
+
+
+          if (Array.isArray(field.value)) {
+            value.textContent = field.value.length > 0 ? field.value.join(', ') : '(empty)';
+          } else if (field.type === 'radio_grid' && typeof field.value === 'object' && field.value !== null) {
+            const entries = Object.entries(field.value);
+            value.textContent = entries.length > 0 ? entries.map(([row, col]) => `${row}: ${col}`).join('; ') : '(empty)';
+          } else if (field.type === 'checkbox_grid' && typeof field.value === 'object' && field.value !== null) {
+            const entries = Object.entries(field.value);
+            value.textContent = entries.length > 0 ? entries
+              .filter(([row, cols]) => Array.isArray(cols) && cols.length > 0)
+              .map(([row, cols]) => `${row}: ${cols.join(', ')}`)
+              .join('; ') : '(empty)';
+          } else if (field.value !== undefined && field.value !== null) {
+            value.textContent = field.value.toString() || '(empty)';
+          } else {
+            value.textContent = '(empty)';
+          }
+
+          fieldDiv.appendChild(question);
+          fieldDiv.appendChild(value);
+          section.appendChild(fieldDiv);
+        });
+
+        savedPreview.appendChild(section);
+      }
 
       savedPreview.classList.add('show');
-      
+
     } else {
       savedStatus.textContent = 'No saved data yet';
       clearBtn.style.display = 'none';
-      
+
       fillBtn.disabled = true;
-      
+
       savedPreview.innerHTML = '';
       savedPreview.classList.remove('show');
     }
-    
+
   } catch (error) {
     console.error('Error loading saved data:', error);
     savedStatus.textContent = 'Error loading saved data';
@@ -649,21 +713,21 @@ async function clearSavedData() {
 
   try {
     const success = await StorageHelper.remove('savedFormData');
-    
+
     if (success) {
       // Reset UI state
       detectedFields = [];
       fieldsContainer.style.display = 'none';
       fieldsList.innerHTML = '';
-      
+
       fillBtn.disabled = true;
-      
+
       // Update saved data display
       savedStatus.textContent = 'No saved data yet';
       clearBtn.style.display = 'none';
       savedPreview.innerHTML = '';
       savedPreview.classList.remove('show');
-      
+
       showStatus('🗑️ Saved data cleared successfully', 'success');
     } else {
       showStatus('❌ Failed to clear data', 'error');

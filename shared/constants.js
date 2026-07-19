@@ -98,6 +98,18 @@
     GITHUB_URL: 'https://github.com/YOUR_USERNAME/google-forms-autofill'
   };
 
+  /**
+   * Form specific utilities
+   */
+  const FormUtils = {
+    getFormIdFromUrl(url) {
+      if (!url) return null;
+      // Match /d/e/ID or /d/ID
+      const match = url.match(/\/d\/(?:e\/)?([a-zA-Z0-9_-]+)/);
+      return match ? match[1] : 'unknown-form';
+    }
+  };
+
   // Expose to global namespace
   global.FIELD_TYPES = FIELD_TYPES;
   global.STORAGE_KEYS = STORAGE_KEYS;
@@ -105,5 +117,6 @@
   global.TIMING = TIMING;
   global.STATUS_TYPES = STATUS_TYPES;
   global.EXTENSION_INFO = EXTENSION_INFO;
+  global.FormUtils = FormUtils;
 
 })(window);

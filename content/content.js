@@ -149,17 +149,19 @@
   }
 
   /**
-   * Load and fill form with saved data
+   * Load and fill form with saved data for the current form
    */
   async function loadAndFillForm() {
-    const savedData = await StorageHelper.get(STORAGE_KEYS.SAVED_FORM_DATA);
+    const allData = await StorageHelper.get(STORAGE_KEYS.SAVED_FORM_DATA);
+    const formId = FormUtils.getFormIdFromUrl(window.location.href);
 
-    if (!savedData || savedData.length === 0) {
-      logger.warn('No saved data found');
+    if (!allData || !allData[formId] || !allData[formId].fields || allData[formId].fields.length === 0) {
+      logger.warn('No saved data found for this form');
       return { success: 0, failed: 0 };
     }
 
-    logger.info(`Loading ${savedData.length} fields from storage`);
+    const savedData = allData[formId].fields;
+    logger.info(`Loading ${savedData.length} fields from storage for form ${formId}`);
 
     return await fillAllFields(savedData);
   }
@@ -198,35 +200,55 @@
               // Allow popup to provide data payload to save
               if (request.data && Array.isArray(request.data)) {
                 try {
-                  // 1. Ambil data lama terlebih dahulu
-                  const existingData = await StorageHelper.get(STORAGE_KEYS.SAVED_FORM_DATA) || [];
+                  const formId = FormUtils.getFormIdFromUrl(window.location.href);
+                  const formTitle = document.title.replace(' - Google Forms', '').trim() || 'Untitled Form';
 
-                  // 2. Buat Map untuk merging (menggunakan pertanyaan sebagai key unik)
-                  // Kita gunakan Map untuk memudahkan update jika ada perubahan value pada pertanyaan yang sama
+                  // 1. Ambil data lama terlebih dahulu
+                  let allData = await StorageHelper.get(STORAGE_KEYS.SAVED_FORM_DATA) || {};
+                  
+                  // Migrasi jika data lama berupa array (format lama)
+                  if (Array.isArray(allData)) {
+                     allData = {};
+                  }
+
+                  // 2. Buat profil form jika belum ada
+                  if (!allData[formId]) {
+                    allData[formId] = {
+                      id: formId,
+                      title: formTitle,
+                      url: window.location.href,
+                      fields: [],
+                      updatedAt: Date.now()
+                    };
+                  }
+
+                  // 3. Merging logic (menggunakan pertanyaan sebagai key unik)
+                  const existingFields = allData[formId].fields;
                   const dataMap = new Map();
 
                   // Masukkan data lama ke Map
-                  existingData.forEach(field => {
+                  existingFields.forEach(field => {
                     if (field && field.question) {
                       dataMap.set(field.question, field);
                     }
                   });
 
-                  // 3. Masukkan/Update dengan data baru dari halaman saat ini
+                  // Masukkan/Update dengan data baru dari halaman saat ini
                   request.data.forEach(field => {
                     if (field && field.question) {
-                      // Kita overwrite entry lama dengan yang baru (karena user mungkin baru saja mengedit value di popup)
                       dataMap.set(field.question, field);
                     }
                   });
 
-                  // 4. Konversi kembali ke Array
-                  const mergedData = Array.from(dataMap.values());
+                  // 4. Konversi kembali ke Array dan update profil
+                  allData[formId].fields = Array.from(dataMap.values());
+                  allData[formId].updatedAt = Date.now();
+                  allData[formId].title = formTitle; // Update title
 
                   // 5. Simpan data yang sudah digabungkan
-                  const setSuccess = await StorageHelper.set(STORAGE_KEYS.SAVED_FORM_DATA, mergedData);
+                  const setSuccess = await StorageHelper.set(STORAGE_KEYS.SAVED_FORM_DATA, allData);
 
-                  logger.info(`Merged data saved. Total fields: ${mergedData.length}`);
+                  logger.info(`Merged data saved for form ${formId}. Total fields: ${allData[formId].fields.length}`);
                   sendResponse({ success: setSuccess });
 
                 } catch (err) {
@@ -242,8 +264,24 @@
               break;
 
             case 'fillForm':
-              const fillResult = await fillAllFields(request.data);
-              sendResponse({ success: true, result: fillResult });
+              let fieldsToFill = request.data;
+              
+              if (!fieldsToFill || fieldsToFill.length === 0) {
+                // If popup didn't send data, fetch it from storage based on form ID
+                const formId = FormUtils.getFormIdFromUrl(window.location.href);
+                const allData = await StorageHelper.get(STORAGE_KEYS.SAVED_FORM_DATA) || {};
+                
+                if (allData[formId] && allData[formId].fields) {
+                  fieldsToFill = allData[formId].fields;
+                }
+              }
+
+              if (fieldsToFill && fieldsToFill.length > 0) {
+                const fillResult = await fillAllFields(fieldsToFill);
+                sendResponse({ success: true, result: fillResult });
+              } else {
+                sendResponse({ success: false, error: 'No saved data to fill' });
+              }
               break;
 
             case 'loadAndFill':
@@ -252,8 +290,21 @@
               break;
 
             case 'clearData':
-              const clearSuccess = await clearSavedData();
-              sendResponse({ success: clearSuccess });
+              if (request.formId) {
+                // Hapus data form tertentu
+                const allData = await StorageHelper.get(STORAGE_KEYS.SAVED_FORM_DATA) || {};
+                if (allData[request.formId]) {
+                  delete allData[request.formId];
+                  const success = await StorageHelper.set(STORAGE_KEYS.SAVED_FORM_DATA, allData);
+                  sendResponse({ success });
+                } else {
+                  sendResponse({ success: true });
+                }
+              } else {
+                // Hapus semua data
+                const clearSuccess = await clearSavedData();
+                sendResponse({ success: clearSuccess });
+              }
               break;
 
             default:
